@@ -31,7 +31,7 @@ const S3Upload = () => {
       });
 
       const data = await response.json();
-      setMatchingScore(data.matchScore);  // Assuming Lambda returns matchingScore
+      setMatchingScore(data.matchScore); 
     } catch (error) {
       setError('Error matching job description with resume');
     }
