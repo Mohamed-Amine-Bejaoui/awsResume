@@ -1,0 +1,83 @@
+import { DynamoDBClient, GetItemCommand } from "@aws-sdk/client-dynamodb";
+
+const dynamoDB = new DynamoDBClient();
+
+export const handler = async (event) => {
+  try {
+    if (!event.body) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "No request body found" }),
+      };
+    }
+
+    let eventData;
+    try {
+      eventData = JSON.parse(event.body);
+    } catch (error) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Invalid JSON format" }),
+      };
+    }
+
+    const { jobDescription, resumeId } = eventData;
+
+    if (!jobDescription || !resumeId) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "jobDescription and resumeId are required" }),
+      };
+    }
+
+    const params = {
+      TableName: "resumes",
+      Key: {
+        id: { S: resumeId }, 
+      },
+    };
+
+    const result = await dynamoDB.send(new GetItemCommand(params));
+
+    if (!result.Item) {
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ error: "Resume not found" }),
+      };
+    }
+
+    const keyPhrases = result.Item.keyPhrases.SS || [];  
+
+    if (keyPhrases.length === 0) {
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ error: "No key phrases found for the resume" }),
+      };
+    }
+
+    const jobDescriptionTokens = jobDescription.toLowerCase().split(/\W+/); 
+    let matchCount = 0;
+
+    jobDescriptionTokens.forEach((word) => {
+      if (keyPhrases.some((phrase) => phrase.toLowerCase().includes(word))) {
+        matchCount++;
+      }
+    });
+
+    const matchScore = (matchCount / jobDescriptionTokens.length) * 100;
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: "Job description match completed successfully",
+        matchScore: matchScore.toFixed(2), 
+      }),
+    };
+  } catch (error) {
+    console.error("Error:", error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Internal server error" }),
+    };
+  }
+};
